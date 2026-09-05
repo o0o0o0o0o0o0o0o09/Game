@@ -1,1 +1,237 @@
 @import "tailwindcss";
+
+@theme {
+  --font-disp: "Russo One", "Rubik", sans-serif;
+  --font-body: "Rubik", sans-serif;
+
+  --color-ink-950: #05070f;
+  --color-ink-900: #0a0f1d;
+  --color-ink-800: #101830;
+  --color-ink-700: #1a2440;
+
+  --color-acid-300: #e2ff7a;
+  --color-acid-400: #c8ff2e;
+  --color-acid-500: #a8e612;
+
+  --color-neon-300: #8df6ff;
+  --color-neon-400: #35f0ff;
+  --color-neon-500: #12c8e0;
+
+  --color-blood-300: #ff8aa5;
+  --color-blood-400: #ff3864;
+  --color-blood-500: #d61f4b;
+
+  --color-ember-300: #ffd27a;
+  --color-ember-400: #ffb020;
+  --color-ember-500: #e08e00;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #05070f;
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* ── угловые панели (срезанные углы вместо скруглений) ── */
+.clip-panel {
+  clip-path: polygon(
+    14px 0,
+    100% 0,
+    100% calc(100% - 14px),
+    calc(100% - 14px) 100%,
+    0 100%,
+    0 14px
+  );
+}
+.clip-slot {
+  clip-path: polygon(
+    8px 0,
+    100% 0,
+    100% calc(100% - 8px),
+    calc(100% - 8px) 100%,
+    0 100%,
+    0 8px
+  );
+}
+.clip-btn {
+  clip-path: polygon(
+    12px 0,
+    100% 0,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    0 100%,
+    0 12px
+  );
+}
+
+.panel-base {
+  background: linear-gradient(160deg, rgba(16, 24, 48, 0.92), rgba(8, 12, 26, 0.92));
+  border: 1px solid rgba(53, 240, 255, 0.22);
+  box-shadow:
+    0 0 0 1px rgba(5, 7, 15, 0.6),
+    0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* ── сканлайны поверх экрана ── */
+.scanlines::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.022) 0px,
+    rgba(255, 255, 255, 0.022) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: overlay;
+}
+.vignette {
+  background: radial-gradient(
+    ellipse at center,
+    transparent 52%,
+    rgba(3, 5, 12, 0.55) 88%,
+    rgba(2, 3, 9, 0.85) 100%
+  );
+}
+
+/* ── анимации ── */
+@keyframes banner-in {
+  0% {
+    opacity: 0;
+    transform: translateY(26px) scaleX(0.7);
+    letter-spacing: 0.6em;
+    filter: blur(6px);
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(0) scaleX(1);
+    letter-spacing: 0.18em;
+    filter: blur(0);
+  }
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-18px);
+    filter: blur(4px);
+  }
+}
+.anim-banner {
+  animation: banner-in 1.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(46px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.anim-card {
+  animation: card-in 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.anim-screen {
+  animation: screen-in 0.35s ease-out both;
+}
+
+@keyframes hud-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.anim-hud {
+  animation: hud-in 0.4s ease-out both;
+}
+
+@keyframes title-flicker {
+  0%, 100% { text-shadow: 0 0 24px rgba(200, 255, 46, 0.35), 4px 4px 0 rgba(255, 56, 100, 0.55), -4px -3px 0 rgba(53, 240, 255, 0.5); }
+  8% { text-shadow: 0 0 30px rgba(200, 255, 46, 0.5), 5px 4px 0 rgba(255, 56, 100, 0.7), -5px -3px 0 rgba(53, 240, 255, 0.65); }
+  10% { text-shadow: 0 0 20px rgba(200, 255, 46, 0.3), 3px 3px 0 rgba(255, 56, 100, 0.5), -3px -2px 0 rgba(53, 240, 255, 0.45); }
+  52% { text-shadow: 0 0 24px rgba(200, 255, 46, 0.35), 4px 4px 0 rgba(255, 56, 100, 0.55), -4px -3px 0 rgba(53, 240, 255, 0.5); }
+  54% { text-shadow: 0 0 34px rgba(200, 255, 46, 0.55), 6px 5px 0 rgba(255, 56, 100, 0.75), -6px -4px 0 rgba(53, 240, 255, 0.7); }
+  56% { text-shadow: 0 0 24px rgba(200, 255, 46, 0.35), 4px 4px 0 rgba(255, 56, 100, 0.55), -4px -3px 0 rgba(53, 240, 255, 0.5); }
+}
+.anim-title {
+  animation: title-flicker 3.2s infinite;
+}
+
+@keyframes pulse-danger {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.35; }
+}
+.anim-danger {
+  animation: pulse-danger 0.7s ease-in-out infinite;
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.anim-float {
+  animation: float-slow 4s ease-in-out infinite;
+}
+
+@keyframes blink-caret {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.anim-caret {
+  animation: blink-caret 1s step-end infinite;
+}
+
+/* кнопки */
+.btn-game {
+  transition:
+    transform 0.09s ease,
+    filter 0.12s ease,
+    background-color 0.12s ease,
+    color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.btn-game:hover {
+  filter: brightness(1.18);
+  transform: translateY(-2px);
+}
+.btn-game:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.card-upgrade {
+  transition:
+    transform 0.14s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.14s ease,
+    border-color 0.14s ease,
+    background 0.14s ease;
+}
+.card-upgrade:hover {
+  transform: translateY(-8px) scale(1.03);
+}
