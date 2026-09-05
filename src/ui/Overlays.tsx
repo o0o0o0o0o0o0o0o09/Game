@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import type { GameOverStats, HudData, Rarity, UpgradeChoice, WeaponId } from "../game/data";
+import type { CSSProperties, ReactNode } from "react";
+import type { AbilityHud, GameOverStats, HudData, Rarity, UpgradeChoice, WeaponId } from "../game/data";
 import { RARITY_LABEL, WEAPONS, WEAPON_ORDER, fmtScore, fmtTime } from "../game/data";
 
 /* ─────────────── иконки (inline SVG) ─────────────── */
@@ -139,6 +139,43 @@ export function Icon({ name, className = "w-6 h-6" }: { name: string; className?
           <path d="M2 12c2.5 0 2.5-4 5-4s2.5 8 5 8 2.5-8 5-8 2.5 4 5 4" />
         </svg>
       );
+    case "dash":
+      return (
+        <svg viewBox="0 0 24 24" className={className} {...s}>
+          <path d="m3 6 6 6-6 6" />
+          <path d="m10 6 6 6-6 6" opacity="0.7" />
+          <path d="M19 6v12" opacity="0.4" />
+        </svg>
+      );
+    case "nova":
+      return (
+        <svg viewBox="0 0 24 24" className={className} {...s}>
+          <circle cx="12" cy="12" r="3.2" />
+          <path d="M12 2.5v3.4M12 18.1v3.4M2.5 12h3.4M18.1 12h3.4M5.2 5.2l2.4 2.4M16.4 16.4l2.4 2.4M18.8 5.2l-2.4 2.4M7.6 16.4l-2.4 2.4" />
+        </svg>
+      );
+    case "chrono":
+      return (
+        <svg viewBox="0 0 24 24" className={className} {...s}>
+          <circle cx="12" cy="13" r="7.5" />
+          <path d="M12 9.5V13l2.6 1.8" />
+          <path d="M9 2.5h6" />
+        </svg>
+      );
+    case "core":
+      return (
+        <svg viewBox="0 0 24 24" className={className} {...s}>
+          <circle cx="12" cy="12" r="3" />
+          <circle cx="12" cy="12" r="7.5" opacity="0.55" />
+          <path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3" />
+        </svg>
+      );
+    case "capacitor":
+      return (
+        <svg viewBox="0 0 24 24" className={className} {...s}>
+          <path d="M13 2 5.5 13H11l-1 9L18 10.5h-5.5L13 2z" />
+        </svg>
+      );
     default:
       return null;
   }
@@ -152,6 +189,72 @@ const RAR: Record<Rarity, { color: string; rgb: string }> = {
   epic: { color: "#ff3864", rgb: "255,56,100" },
   weapon: { color: "#c8ff2e", rgb: "200,255,46" },
 };
+
+/* ─────────────── слот способности ─────────────── */
+
+const AB_META: Record<AbilityHud["id"], { key: string; name: string; icon: string; color: string; rgb: string }> = {
+  dash: { key: "SPACE", name: "РЫВОК", icon: "dash", color: "#c8ff2e", rgb: "200,255,46" },
+  nova: { key: "E", name: "НОВА", icon: "nova", color: "#ffb020", rgb: "255,176,32" },
+  shield: { key: "Q", name: "ЩИТ", icon: "shield", color: "#35f0ff", rgb: "53,240,255" },
+};
+
+function AbilitySlot({ a }: { a: AbilityHud }) {
+  const m = AB_META[a.id];
+  const ready = a.charges > 0;
+  const frac = a.maxCd > 0 ? Math.min(1, Math.max(0, a.cd / a.maxCd)) : 0;
+  const actFrac = a.activeMax > 0 ? Math.min(1, Math.max(0, a.active / a.activeMax)) : 0;
+  return (
+    <div
+      className={`ability-slot relative w-[64px] h-[68px] clip-slot flex flex-col items-center justify-center gap-0.5 border transition-colors duration-150 ${ready ? "ready" : ""}`}
+      style={{
+        "--ab": m.rgb,
+        borderColor: ready ? `${m.color}77` : "rgba(255,255,255,0.14)",
+        background: ready ? `rgba(${m.rgb},0.07)` : "rgba(9,13,28,0.85)",
+      } as CSSProperties}
+    >
+      {/* перезарядка: шторка снизу */}
+      {!ready && (
+        <div
+          className="absolute inset-x-0 bottom-0 z-[1] bg-[rgba(3,5,12,0.82)] transition-[height] duration-100 ease-linear pointer-events-none"
+          style={{ height: `${frac * 100}%` }}
+        />
+      )}
+      {/* полоска активной фазы */}
+      {actFrac > 0 && (
+        <div
+          className="absolute top-0 left-0 h-[3px] z-[3]"
+          style={{ width: `${actFrac * 100}%`, background: m.color, boxShadow: `0 0 8px rgba(${m.rgb},0.9)` }}
+        />
+      )}
+      <span
+        className="relative z-[2] leading-none"
+        style={{
+          color: ready ? m.color : "rgba(255,255,255,0.35)",
+          filter: ready ? `drop-shadow(0 0 6px rgba(${m.rgb},0.7))` : undefined,
+        }}
+      >
+        <Icon name={m.icon} className="w-6 h-6" />
+      </span>
+      <span className="relative z-[2] text-[8px] font-bold tracking-widest leading-none" style={{ color: ready ? m.color : "rgba(255,255,255,0.3)" }}>
+        {m.key}
+      </span>
+      <span className="relative z-[2] text-[9px] font-bold tracking-widest leading-none" style={{ color: ready ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.35)" }}>
+        {m.name}
+      </span>
+      {a.maxCharges > 1 && (
+        <div className="absolute top-1 right-1 z-[3] flex gap-0.5">
+          {Array.from({ length: a.maxCharges }).map((_, i) => (
+            <span
+              key={i}
+              className="w-1.5 h-1.5 rotate-45 border"
+              style={i < a.charges ? { background: m.color, borderColor: m.color } : { borderColor: "rgba(255,255,255,0.3)" }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ─────────────── HUD ─────────────── */
 
@@ -224,8 +327,12 @@ export function Hud({
         </div>
       </div>
 
-      {/* нижняя строка: оружие */}
+      {/* нижняя строка: способности + оружие */}
       <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-end gap-2">
+        {hud.abilities.map((a) => (
+          <AbilitySlot key={a.id} a={a} />
+        ))}
+        <span className="w-px self-stretch my-2 bg-white/15 mx-1" />
         {WEAPON_ORDER.map((id, i) => {
           const owned = hud.owned.includes(id);
           const active = hud.weapon === id;
@@ -256,7 +363,8 @@ export function Hud({
       {/* подсказки + звук */}
       <div className="absolute bottom-3 left-4 text-[10px] font-semibold text-white/35 leading-relaxed hidden md:block">
         <div>WASD — движение · МЫШЬ — прицел · ЛКМ — огонь</div>
-        <div>Q / КОЛЕСО — оружие · ESC — пауза · M — звук</div>
+        <div><span className="text-acid-300/70">SPACE — рывок</span> · <span className="text-ember-300/70">E — нова</span> · <span className="text-neon-300/70">Q — щит</span></div>
+        <div>1–4 / КОЛЕСО — оружие · ESC — пауза · M — звук</div>
       </div>
       <button
         onMouseEnter={onHover}
@@ -418,7 +526,9 @@ export function MenuScreen({ onStart, onHover }: { onStart: () => void; onHover:
           <div className="flex flex-wrap gap-x-5 gap-y-2 mt-8 text-[12px] font-semibold text-white/45">
             <span className="flex items-center gap-1.5"><Kbd>W</Kbd><Kbd>A</Kbd><Kbd>S</Kbd><Kbd>D</Kbd> движение</span>
             <span className="flex items-center gap-1.5"><Kbd>ЛКМ</Kbd> огонь</span>
-            <span className="flex items-center gap-1.5"><Kbd>Q</Kbd> смена оружия</span>
+            <span className="flex items-center gap-1.5 text-acid-300/90"><Kbd>SPACE</Kbd> рывок</span>
+            <span className="flex items-center gap-1.5 text-ember-300/90"><Kbd>E</Kbd> нова</span>
+            <span className="flex items-center gap-1.5 text-neon-300/90"><Kbd>Q</Kbd> щит</span>
             <span className="flex items-center gap-1.5"><Kbd>ESC</Kbd> пауза</span>
           </div>
         </div>
@@ -450,6 +560,7 @@ export function MenuScreen({ onStart, onHover }: { onStart: () => void; onHover:
               <li>▸ Каждая зачищенная волна — выбор 1 из 3 усилений</li>
               <li>▸ Враги мутируют: растут HP, скорость и урон</li>
               <li>▸ С 4-й волны выходят <span className="text-[#c04dff] font-bold">Громилы</span> — держи дистанцию</li>
+              <li>▸ Способности — <span className="text-acid-300 font-bold">рывок</span>, <span className="text-ember-300 font-bold">нова</span>, <span className="text-neon-300 font-bold">щит</span> — перезаряжаются сами; ищи «Хроно-модуль» и «Термоядро»</li>
             </ul>
           </div>
         </div>

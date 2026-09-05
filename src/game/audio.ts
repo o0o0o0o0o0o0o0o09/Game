@@ -137,6 +137,22 @@ export class Sfx {
     this.tone(660, 0.14, "square", 0.12);
     this.tone(990, 0.22, "square", 0.12, undefined, 0.09);
   }
+  dash() {
+    this.noise(0.16, 0.16, 2600, 0.8);
+    this.tone(280, 0.14, "sine", 0.12, 950);
+  }
+  nova() {
+    this.tone(90, 0.5, "sawtooth", 0.3, 28);
+    this.noise(0.5, 0.32, 320, 0.45);
+    this.tone(55, 0.42, "sine", 0.26, 24, 0.02);
+  }
+  shieldUp() {
+    this.tone(420, 0.28, "triangle", 0.12, 840);
+    this.tone(640, 0.38, "sine", 0.09, 1000, 0.06);
+  }
+  shieldBlock() {
+    this.tone(1200, 0.05, "square", 0.06, 700);
+  }
   gameOver() {
     const seq = [392, 311, 233, 155];
     seq.forEach((f, i) => this.tone(f, 0.4, "sawtooth", 0.16, f * 0.92, i * 0.18));

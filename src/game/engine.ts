@@ -43,7 +43,7 @@ interface EnemyBullet {
 }
 
 interface Particle {
-  kind: "spark" | "smoke" | "shell" | "ring" | "flash" | "debris";
+  kind: "spark" | "smoke" | "shell" | "ring" | "flash" | "debris" | "ghost";
   x: number; y: number; vx: number; vy: number;
   t: number; life: number; size: number; color: string;
   rot: number; vr: number;
@@ -67,6 +67,16 @@ export interface EngineCallbacks {
 const TAU = Math.PI * 2;
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+
+/* суперспособности */
+const DASH_TIME = 0.16;
+const DASH_SPEED = 1250;
+const DASH_CD = 2.4;
+const NOVA_CD = 6;
+const NOVA_BASE_DMG = 55;
+const NOVA_RADIUS = 225;
+const SHIELD_TIME = 3;
+const SHIELD_CD = 10;
 
 export class Engine {
   private cv: HTMLCanvasElement;
@@ -118,6 +128,16 @@ export class Engine {
   private hudT = 0;
   private ambientT = 0;
 
+  /* суперспособности */
+  private dashT = 0;
+  private dashDx = 0;
+  private dashDy = -1;
+  private dashCharges = 1;
+  private dashRecover = 0;
+  private novaCd = 0;
+  private shieldT = 0;
+  private shieldCd = 0;
+
   private keys = new Set<string>();
   private mouse = { x: 0, y: 0, down: false };
 
@@ -164,7 +184,9 @@ export class Engine {
       if (c === "Digit2") this.selectWeapon("smg");
       if (c === "Digit3") this.selectWeapon("shotgun");
       if (c === "Digit4") this.selectWeapon("laser");
-      if (c === "KeyQ" || c === "KeyE") this.cycleWeapon(1);
+      if (c === "Space") this.tryDash();
+      if (c === "KeyE") this.tryNova();
+      if (c === "KeyQ") this.tryShield();
     }
   };
 
@@ -267,6 +289,12 @@ export class Engine {
     this.iframes = 0;
     this.pkx = 0;
     this.pky = 0;
+    this.dashT = 0;
+    this.dashCharges = 1;
+    this.dashRecover = 0;
+    this.novaCd = 0;
+    this.shieldT = 0;
+    this.shieldCd = 0;
     this.px = this.w / 2;
     this.py = this.h / 2;
     this.splatCtx.clearRect(0, 0, this.w, this.h);
@@ -426,6 +454,10 @@ export class Engine {
       if (def) {
         def.apply(this.stats);
         this.stats.taken[def.id] = (this.stats.taken[def.id] ?? 0) + 1;
+        if (def.id === "dashMax") {
+          this.dashCharges = this.stats.dashMax;
+          this.dashRecover = 0;
+        }
         this.float(this.px, this.py - 40, def.name.toUpperCase(), "#35f0ff", 18, true);
       }
     }
@@ -460,6 +492,93 @@ export class Engine {
     }
   }
 
+  /* ── суперспособности ── */
+
+  private tryDash() {
+    if (this.phase !== "playing" || this.dashT > 0 || this.dashCharges <= 0) return;
+    let dx = 0;
+    let dy = 0;
+    if (this.keys.has("KeyW") || this.keys.has("ArrowUp")) dy -= 1;
+    if (this.keys.has("KeyS") || this.keys.has("ArrowDown")) dy += 1;
+    if (this.keys.has("KeyA") || this.keys.has("ArrowLeft")) dx -= 1;
+    if (this.keys.has("KeyD") || this.keys.has("ArrowRight")) dx += 1;
+    if (dx === 0 && dy === 0) {
+      dx = Math.cos(this.aim);
+      dy = Math.sin(this.aim);
+    }
+    const len = Math.hypot(dx, dy) || 1;
+    this.dashDx = dx / len;
+    this.dashDy = dy / len;
+    this.dashT = DASH_TIME;
+    this.dashCharges--;
+    if (this.dashRecover <= 0) this.dashRecover = DASH_CD * this.stats.abilityCdMul;
+    this.sfx.dash();
+    this.shake = Math.min(12, this.shake + 3);
+    this.puff(this.px - this.dashDx * 16, this.py - this.dashDy * 16, "#c8ff2e", 9);
+    this.emitHud();
+  }
+
+  private tryNova() {
+    if (this.phase !== "playing" || this.novaCd > 0) return;
+    const s = this.stats;
+    const novaUp = s.taken["novaPower"] ?? 0;
+    const radius = NOVA_RADIUS * (1 + 0.15 * novaUp);
+    const dmg = NOVA_BASE_DMG * s.damage * s.novaPower;
+    this.novaCd = NOVA_CD * s.abilityCdMul;
+
+    const targets = this.enemies.filter(
+      (e) => Math.hypot(e.x - this.px, e.y - this.py) < radius + e.r
+    );
+    for (const e of targets) {
+      if (e.hp <= 0) continue;
+      const dx = e.x - this.px;
+      const dy = e.y - this.py;
+      const d = Math.hypot(dx, dy) || 1;
+      const kb = e.type === "brute" ? 320 : 780;
+      this.damageEnemy(e, dmg, false, (dx / d) * kb, (dy / d) * kb, true);
+    }
+    /* сбить вражеские снаряды */
+    for (let i = this.ebullets.length - 1; i >= 0; i--) {
+      const b = this.ebullets[i];
+      if (Math.hypot(b.x - this.px, b.y - this.py) < radius) {
+        this.puff(b.x, b.y, "#7dff5e", 4);
+        this.ebullets.splice(i, 1);
+      }
+    }
+    /* fx */
+    this.particles.push({ kind: "flash", x: this.px, y: this.py, vx: 0, vy: 0, t: 0, life: 0.18, size: 70, color: "#ffb020", rot: rand(0, TAU), vr: 0 });
+    this.particles.push({ kind: "ring", x: this.px, y: this.py, vx: 0, vy: 0, t: 0, life: 0.4, size: 26, color: "#ffb020", rot: 0, vr: 0 });
+    this.particles.push({ kind: "ring", x: this.px, y: this.py, vx: 0, vy: 0, t: 0, life: 0.55, size: radius * 0.5, color: "#ff3864", rot: 0, vr: 0 });
+    this.burst(this.px, this.py, "#ffb020", 28);
+    /* подпалина на полу */
+    const sc = this.splatCtx;
+    sc.strokeStyle = "rgba(16,13,20,0.5)";
+    sc.lineWidth = 26;
+    sc.beginPath();
+    sc.arc(this.px, this.py, radius * 0.72, 0, TAU);
+    sc.stroke();
+    sc.strokeStyle = "rgba(255,176,32,0.18)";
+    sc.lineWidth = 3;
+    sc.beginPath();
+    sc.arc(this.px, this.py, radius * 0.92, 0, TAU);
+    sc.stroke();
+    this.shake = Math.min(22, this.shake + 13);
+    this.sfx.nova();
+    this.float(this.px, this.py - 46, "НОВА", "#ffb020", 22, true);
+    this.emitHud();
+  }
+
+  private tryShield() {
+    if (this.phase !== "playing" || this.shieldCd > 0 || this.shieldT > 0) return;
+    this.shieldT = SHIELD_TIME;
+    this.shieldCd = SHIELD_CD * this.stats.abilityCdMul;
+    this.particles.push({ kind: "ring", x: this.px, y: this.py, vx: 0, vy: 0, t: 0, life: 0.35, size: 20, color: "#35f0ff", rot: 0, vr: 0 });
+    this.puff(this.px, this.py, "#35f0ff", 10);
+    this.sfx.shieldUp();
+    this.float(this.px, this.py - 40, "ЩИТ", "#35f0ff", 18, true);
+    this.emitHud();
+  }
+
   /* ── обновление ── */
 
   private update(dt: number) {
@@ -468,33 +587,61 @@ export class Engine {
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.hurtT = Math.max(0, this.hurtT - dt);
     this.recoilT = Math.max(0, this.recoilT - dt);
+    this.novaCd = Math.max(0, this.novaCd - dt);
+    this.shieldCd = Math.max(0, this.shieldCd - dt);
+    this.shieldT = Math.max(0, this.shieldT - dt);
+    if (this.dashCharges < this.stats.dashMax) {
+      this.dashRecover -= dt;
+      if (this.dashRecover <= 0) {
+        this.dashCharges++;
+        this.dashRecover = DASH_CD * this.stats.abilityCdMul;
+        this.float(this.px, this.py - 34, "ЗАРЯД +1", "#c8ff2e", 13, false);
+        this.emitHud();
+      }
+    } else {
+      this.dashRecover = 0;
+    }
 
     const s = this.stats;
     s.hp = Math.min(s.maxHp, s.hp + s.regen * dt);
 
     /* движение игрока */
-    let dx = 0;
-    let dy = 0;
-    if (this.keys.has("KeyW") || this.keys.has("ArrowUp")) dy -= 1;
-    if (this.keys.has("KeyS") || this.keys.has("ArrowDown")) dy += 1;
-    if (this.keys.has("KeyA") || this.keys.has("ArrowLeft")) dx -= 1;
-    if (this.keys.has("KeyD") || this.keys.has("ArrowRight")) dx += 1;
-    const len = Math.hypot(dx, dy) || 1;
-    dx /= len; dy /= len;
-    this.moving = dx !== 0 || dy !== 0;
-    const spd = 265 * s.moveSpeed;
-    const ease = 1 - Math.exp(-14 * dt);
-    this.pkx += (dx * spd - this.pkx) * ease;
-    this.pky += (dy * spd - this.pky) * ease;
-    this.px = clamp(this.px + this.pkx * dt, 18, this.w - 18);
-    this.py = clamp(this.py + this.pky * dt, 18, this.h - 18);
-
-    if (this.moving && Math.random() < dt * 30) {
+    if (this.dashT > 0) {
+      this.dashT -= dt;
+      this.px = clamp(this.px + this.dashDx * DASH_SPEED * dt, 18, this.w - 18);
+      this.py = clamp(this.py + this.dashDy * DASH_SPEED * dt, 18, this.h - 18);
+      this.pkx = this.dashDx * 265 * s.moveSpeed;
+      this.pky = this.dashDy * 265 * s.moveSpeed;
+      this.moving = true;
+      /* призрак-след */
       this.particles.push({
-        kind: "smoke", x: this.px - dx * 14 + rand(-4, 4), y: this.py - dy * 14 + rand(-4, 4),
-        vx: -dx * 30 + rand(-12, 12), vy: -dy * 30 + rand(-12, 12),
-        t: 0, life: rand(0.25, 0.5), size: rand(2, 5), color: "#35f0ff", rot: 0, vr: 0,
+        kind: "ghost", x: this.px, y: this.py, vx: 0, vy: 0,
+        t: 0, life: 0.3, size: 13, color: "#c8ff2e", rot: this.aim, vr: 0,
       });
+    } else {
+      let dx = 0;
+      let dy = 0;
+      if (this.keys.has("KeyW") || this.keys.has("ArrowUp")) dy -= 1;
+      if (this.keys.has("KeyS") || this.keys.has("ArrowDown")) dy += 1;
+      if (this.keys.has("KeyA") || this.keys.has("ArrowLeft")) dx -= 1;
+      if (this.keys.has("KeyD") || this.keys.has("ArrowRight")) dx += 1;
+      const len = Math.hypot(dx, dy) || 1;
+      dx /= len; dy /= len;
+      this.moving = dx !== 0 || dy !== 0;
+      const spd = 265 * s.moveSpeed;
+      const ease = 1 - Math.exp(-14 * dt);
+      this.pkx += (dx * spd - this.pkx) * ease;
+      this.pky += (dy * spd - this.pky) * ease;
+      this.px = clamp(this.px + this.pkx * dt, 18, this.w - 18);
+      this.py = clamp(this.py + this.pky * dt, 18, this.h - 18);
+
+      if (this.moving && Math.random() < dt * 30) {
+        this.particles.push({
+          kind: "smoke", x: this.px - dx * 14 + rand(-4, 4), y: this.py - dy * 14 + rand(-4, 4),
+          vx: -dx * 30 + rand(-12, 12), vy: -dy * 30 + rand(-12, 12),
+          t: 0, life: rand(0.25, 0.5), size: rand(2, 5), color: "#35f0ff", rot: 0, vr: 0,
+        });
+      }
     }
 
     this.aim = Math.atan2(this.mouse.y - this.py, this.mouse.x - this.px);
@@ -671,6 +818,12 @@ export class Engine {
       b.life -= dt;
       const dx = b.x - this.px;
       const dy = b.y - this.py;
+      if (this.shieldT > 0 && dx * dx + dy * dy < 44 * 44) {
+        this.puff(b.x, b.y, "#35f0ff", 5);
+        this.sfx.shieldBlock();
+        this.ebullets.splice(i, 1);
+        continue;
+      }
       if (dx * dx + dy * dy < (b.r + 15) * (b.r + 15)) {
         this.damagePlayer(b.dmg);
         this.puff(b.x, b.y, "#7dff5e", 6);
@@ -721,9 +874,16 @@ export class Engine {
 
       /* контактный урон */
       if (dist < e.r + 15) {
-        this.damagePlayer(e.dmg);
-        e.kx = -nx * 260;
-        e.ky = -ny * 260;
+        if (this.shieldT > 0) {
+          e.kx = -nx * 540;
+          e.ky = -ny * 540;
+          this.puff(this.px + nx * 20, this.py + ny * 20, "#35f0ff", 5);
+          this.sfx.shieldBlock();
+        } else {
+          this.damagePlayer(e.dmg);
+          e.kx = -nx * 260;
+          e.ky = -ny * 260;
+        }
       }
 
       if (e.hp <= 0) {
@@ -794,7 +954,7 @@ export class Engine {
   }
 
   private damagePlayer(dmg: number) {
-    if (this.iframes > 0 || this.phase !== "playing") return;
+    if (this.iframes > 0 || this.dashT > 0 || this.shieldT > 0 || this.phase !== "playing") return;
     this.stats.hp -= dmg;
     this.iframes = 0.9;
     this.hurtT = 0.45;
@@ -977,6 +1137,22 @@ export class Engine {
         c.fillStyle = hexA(p.color, 0.9 * k);
         c.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
         c.restore();
+      } else if (p.kind === "ghost") {
+        c.save();
+        c.translate(p.x, p.y);
+        c.rotate(p.rot);
+        c.globalAlpha = 0.45 * k;
+        c.strokeStyle = p.color;
+        c.lineWidth = 2;
+        c.beginPath();
+        c.arc(0, 0, p.size, 0, TAU);
+        c.moveTo(5, -8);
+        c.lineTo(16, 0);
+        c.lineTo(5, 8);
+        c.closePath();
+        c.stroke();
+        c.restore();
+        c.globalAlpha = 1;
       }
     }
 
@@ -1152,6 +1328,21 @@ export class Engine {
       c.stroke();
     }
 
+    if (this.shieldT > 0) {
+      const fade = this.shieldT < 0.9 ? (Math.sin(t * 26) > 0 ? 0.55 : 0.16) : 0.55;
+      c.strokeStyle = `rgba(53,240,255,${fade})`;
+      c.lineWidth = 2;
+      c.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * TAU + t * 1.4;
+        c.lineTo(Math.cos(a) * 27, Math.sin(a) * 27);
+      }
+      c.closePath();
+      c.stroke();
+      c.fillStyle = "rgba(53,240,255,0.07)";
+      c.fill();
+    }
+
     c.rotate(this.aim);
     /* сопло */
     if (this.moving) {
@@ -1323,6 +1514,35 @@ export class Engine {
       weapon: this.weapon,
       owned: [...this.owned],
       muted: this.sfx.muted,
+      abilities: [
+        {
+          id: "dash",
+          cd: this.dashCharges > 0 ? 0 : this.dashRecover,
+          maxCd: DASH_CD * this.stats.abilityCdMul,
+          charges: this.dashCharges,
+          maxCharges: this.stats.dashMax,
+          active: this.dashT,
+          activeMax: DASH_TIME,
+        },
+        {
+          id: "nova",
+          cd: this.novaCd,
+          maxCd: NOVA_CD * this.stats.abilityCdMul,
+          charges: this.novaCd > 0 ? 0 : 1,
+          maxCharges: 1,
+          active: 0,
+          activeMax: 0,
+        },
+        {
+          id: "shield",
+          cd: this.shieldCd,
+          maxCd: SHIELD_CD * this.stats.abilityCdMul,
+          charges: this.shieldCd > 0 || this.shieldT > 0 ? 0 : 1,
+          maxCharges: 1,
+          active: this.shieldT,
+          activeMax: SHIELD_TIME,
+        },
+      ],
     });
   }
 }

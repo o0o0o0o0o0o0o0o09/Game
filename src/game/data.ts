@@ -117,6 +117,9 @@ export interface PlayerStats {
   extraShots: number;
   crit: number; // 0..1
   regen: number; // HP/сек
+  abilityCdMul: number; // множитель перезарядки способностей (меньше = быстрее)
+  novaPower: number; // множитель урона новы
+  dashMax: number; // заряды рывка
   taken: Record<string, number>;
 }
 
@@ -130,6 +133,9 @@ export const initialStats = (): PlayerStats => ({
   extraShots: 0,
   crit: 0.05,
   regen: 0,
+  abilityCdMul: 1,
+  novaPower: 1,
+  dashMax: 1,
   taken: {},
 });
 
@@ -230,6 +236,33 @@ export const UPGRADES: UpgradeDef[] = [
     max: 99,
     apply: (s) => (s.hp = Math.min(s.maxHp, s.hp + s.maxHp * 0.6)),
   },
+  {
+    id: "abilityCd",
+    name: "Хроно-модуль",
+    desc: "−18% к перезарядке всех способностей",
+    icon: "chrono",
+    rarity: "rare",
+    max: 4,
+    apply: (s) => (s.abilityCdMul *= 0.82),
+  },
+  {
+    id: "novaPower",
+    name: "Термоядро",
+    desc: "+35% к урону и радиусу «Новы»",
+    icon: "core",
+    rarity: "epic",
+    max: 3,
+    apply: (s) => (s.novaPower *= 1.35),
+  },
+  {
+    id: "dashMax",
+    name: "Фазовый конденсатор",
+    desc: "+1 заряд «Рывка» (заряды восстанавливаются)",
+    icon: "capacitor",
+    rarity: "epic",
+    max: 2,
+    apply: (s) => (s.dashMax += 1),
+  },
 ];
 
 export interface UpgradeChoice {
@@ -240,6 +273,16 @@ export interface UpgradeChoice {
   icon: string;
   rarity: Rarity;
   weaponId?: WeaponId;
+}
+
+export interface AbilityHud {
+  id: "dash" | "nova" | "shield";
+  cd: number; // оставшаяся перезарядка, с
+  maxCd: number;
+  charges: number;
+  maxCharges: number;
+  active: number; // оставшееся время действия, с
+  activeMax: number;
 }
 
 export interface HudData {
@@ -254,6 +297,7 @@ export interface HudData {
   weapon: WeaponId;
   owned: WeaponId[];
   muted: boolean;
+  abilities: AbilityHud[];
 }
 
 export interface GameOverStats {

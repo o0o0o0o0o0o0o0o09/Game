@@ -22,6 +22,11 @@ const initialHud: HudData = {
   weapon: "pistol",
   owned: ["pistol"],
   muted: false,
+  abilities: [
+    { id: "dash", cd: 0, maxCd: 1, charges: 1, maxCharges: 1, active: 0, activeMax: 1 },
+    { id: "nova", cd: 0, maxCd: 1, charges: 1, maxCharges: 1, active: 0, activeMax: 1 },
+    { id: "shield", cd: 0, maxCd: 1, charges: 1, maxCharges: 1, active: 0, activeMax: 1 },
+  ],
 };
 
 export default function App() {
