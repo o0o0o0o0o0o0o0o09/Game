@@ -3,6 +3,7 @@ import { Engine } from "./game/engine";
 import type { GameOverStats, HudData, Phase, UpgradeChoice, WeaponId } from "./game/data";
 import {
   Banner,
+  CraftScreen,
   GameOverScreen,
   Hud,
   MenuScreen,
@@ -22,10 +23,15 @@ const initialHud: HudData = {
   weapon: "pistol",
   owned: ["pistol"],
   muted: false,
+  res: { scrap: 0, bio: 0, core: 0 },
+  boss: null,
+  biome: "ПУСТОШЬ",
   abilities: [
-    { id: "dash", cd: 0, maxCd: 1, charges: 1, maxCharges: 1, active: 0, activeMax: 1 },
-    { id: "nova", cd: 0, maxCd: 1, charges: 1, maxCharges: 1, active: 0, activeMax: 1 },
-    { id: "shield", cd: 0, maxCd: 1, charges: 1, maxCharges: 1, active: 0, activeMax: 1 },
+    { id: "dash", cd: 0, maxCd: 2.4, charges: 1, maxCharges: 1, active: 0, activeMax: 0.16 },
+    { id: "nova", cd: 0, maxCd: 6, charges: 1, maxCharges: 1, active: 0, activeMax: 0 },
+    { id: "shield", cd: 0, maxCd: 10, charges: 1, maxCharges: 1, active: 0, activeMax: 3 },
+    { id: "overload", cd: 0, maxCd: 14, charges: 1, maxCharges: 1, active: 0, activeMax: 4 },
+    { id: "mine", cd: 0, maxCd: 5, charges: 3, maxCharges: 3, active: 0, activeMax: 0 },
   ],
 };
 
@@ -65,7 +71,7 @@ export default function App() {
   const eng = () => engineRef.current;
   const hover = () => eng()?.uiSound("hover");
 
-  const inGame = phase === "playing" || phase === "paused" || phase === "intermission";
+  const inGame = phase === "playing" || phase === "paused" || phase === "intermission" || phase === "craft";
 
   return (
     <div className="relative w-full h-full bg-ink-950 scanlines overflow-hidden select-none">
@@ -81,14 +87,24 @@ export default function App() {
           hud={hud}
           onWeapon={(w: WeaponId) => eng()?.selectWeapon(w)}
           onMute={() => eng()?.toggleMute()}
+          onCraft={() => eng()?.openCraft()}
           onHover={hover}
         />
       )}
 
-      {banner && phase !== "intermission" && <Banner banner={banner} />}
+      {banner && phase !== "intermission" && phase !== "craft" && <Banner banner={banner} />}
 
       {phase === "intermission" && (
         <UpgradeModal choices={choices} onPick={(i) => eng()?.chooseByIndex(i)} onHover={hover} />
+      )}
+      {phase === "craft" && (
+        <CraftScreen
+          res={hud.res}
+          hpFrac={hud.maxHp > 0 ? hud.hp / hud.maxHp : 1}
+          onCraft={(id) => eng()?.craft(id)}
+          onClose={() => eng()?.closeCraft()}
+          onHover={hover}
+        />
       )}
       {phase === "menu" && <MenuScreen onStart={() => eng()?.newGame()} onHover={hover} />}
       {phase === "paused" && (
