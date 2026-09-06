@@ -121,6 +121,12 @@ export class Sfx {
   overload() { this.tone(160, 0.4, "sawtooth", 0.14, 640); this.tone(320, 0.35, "square", 0.08, 1280, 0.08); }
   minePlace() { this.tone(500, 0.06, "square", 0.1, 320); }
   mineBeep() { this.tone(1200, 0.05, "square", 0.1); }
+  titanSlam() { this.tone(75, 0.5, "sine", 0.34, 26); this.noise(0.4, 0.26, 180, 0.5); this.tone(50, 0.6, "triangle", 0.2, 24, 0.05); }
+  clack() { this.noise(0.05, 0.14, 2600, 2); this.tone(950, 0.06, "square", 0.08, 500); this.noise(0.04, 0.1, 3400, 2, 0.07); }
+  spit() { this.tone(340, 0.12, "sawtooth", 0.1, 120); this.noise(0.08, 0.08, 1400, 1); }
+  spiral() { this.tone(760, 0.045, "sine", 0.05, 420); }
+  blink() { this.tone(1500, 0.09, "sine", 0.1, 2600); this.noise(0.05, 0.06, 5200, 1.4); }
+  whoosh() { this.noise(0.16, 0.16, 900, 0.6); this.tone(200, 0.14, "sine", 0.08, 700); }
   bossRoar() {
     this.tone(60, 0.8, "sawtooth", 0.26, 42);
     this.tone(90, 0.7, "square", 0.14, 55, 0.1);

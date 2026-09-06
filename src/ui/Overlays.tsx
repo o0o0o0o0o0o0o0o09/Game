@@ -789,7 +789,7 @@ export function MenuScreen({ onStart, onHover }: { onStart: () => void; onHover:
             <ul className="text-[12px] font-medium text-white/55 leading-relaxed space-y-1.5">
               <li>▸ Мир бесконечен: <span className="text-acid-300">Пустошь</span>, <span className="text-neon-300">Мерзлота</span>, <span className="text-ember-400">Тлеющие земли</span>, <span className="text-[#c04dff]">Микоджунгли</span></li>
               <li>▸ Руины и ящики — укрытия и лом; ящики ломаются от пуль</li>
-              <li>▸ Убей босса → открой сундук → выбери 1 из 3 усилений</li>
+              <li>▸ 8 боссов — от <span className="text-blood-400 font-bold">Матриарха</span> до <span className="text-[#ff6a2e] font-bold">Пепельного Титана</span>; убей → сундук → 1 из 3 усилений</li>
               <li>▸ 7 стволов: пистолет, автомат, дробовик, лазер, плазмоид, рельсотрон, миниган</li>
               <li>▸ Крафт <Kbd>C</Kbd>: аптечки, броня, чипы урона, фазовые ячейки</li>
             </ul>

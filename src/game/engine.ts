@@ -85,6 +85,7 @@ interface Chest { x: number; y: number; t: number; opened: boolean; openT: numbe
 interface MineEnt { x: number; y: number; arm: number; fuse: number }
 interface DamageRing { x: number; y: number; r: number; speed: number; maxR: number; dmg: number; color: string; hit: boolean }
 interface Decal { x: number; y: number; r: number; color: string; a: number }
+interface FirePatch { x: number; y: number; r: number; t: number; cd: number }
 
 interface Wall { x: number; y: number; w: number; h: number }
 interface Pillar { x: number; y: number; r: number }
@@ -120,7 +121,7 @@ const SHIELD_CD = 10;
 const OVERLOAD_CD = 14;
 const MINE_CD = 5;
 
-const BOSS_IDS: BossId[] = ["mother", "juggernaut", "overseer"];
+const BOSS_IDS: BossId[] = ["mother", "juggernaut", "overseer", "stiletto", "hydra", "magnetar", "boneking", "titan"];
 
 function hash2(x: number, y: number): number {
   let h = (x * 73856093) ^ (y * 19349663) ^ SEED;
@@ -168,6 +169,7 @@ export class Engine {
   private camX = 0; private camY = 0;
   private chunks = new Map<string, Chunk>();
   private decals: Decal[] = [];
+  private firePatches: FirePatch[] = [];
 
   /* сущности */
   private enemies: Enemy[] = [];
@@ -351,6 +353,7 @@ export class Engine {
     this.mines = [];
     this.rings = [];
     this.decals = [];
+    this.firePatches = [];
     this.chunks.clear();
     this.res = { scrap: 0, bio: 0, core: 0 };
     this.score = 0;
@@ -1133,6 +1136,7 @@ export class Engine {
     this.updateOrbs(dt);
     this.updateChests(dt);
     this.updateRings(dt);
+    this.updateFire(dt);
 
     /* камера */
     const ce = 1 - Math.exp(-6 * dt);
@@ -1297,6 +1301,34 @@ export class Engine {
         }
       }
       if (r.r >= r.maxR) this.rings.splice(i, 1);
+    }
+  }
+
+  /** Горящая земля Титана: тикает уроном, дымит, затухает. */
+  private updateFire(dt: number) {
+    for (let i = this.firePatches.length - 1; i >= 0; i--) {
+      const f = this.firePatches[i];
+      f.t -= dt;
+      f.cd -= dt;
+      if (f.t <= 0) {
+        this.firePatches.splice(i, 1);
+        continue;
+      }
+      const d = Math.hypot(this.px - f.x, this.py - f.y);
+      if (d < f.r + 8 && f.cd <= 0) {
+        f.cd = 0.5;
+        this.damagePlayer(7 * this.dmgMul());
+        this.puff(this.px, this.py, "#ff6a2e", 4);
+      }
+      if (Math.random() < dt * 7 && this.particles.length < 480) {
+        this.particles.push({
+          kind: "spark",
+          x: f.x + rand(-f.r, f.r) * 0.7, y: f.y + rand(-f.r, f.r) * 0.7,
+          vx: rand(-18, 18), vy: rand(-95, -30),
+          t: 0, life: rand(0.3, 0.65), size: rand(1, 2.4),
+          color: Math.random() < 0.5 ? "#ff6a2e" : "#ffb020", rot: 0, vr: 0,
+        });
+      }
     }
   }
 
@@ -1534,6 +1566,13 @@ export class Engine {
   private updateBoss(e: Enemy, dt: number, nx: number, ny: number, dist: number) {
     e.atkCd -= dt;
     e.shootCd -= dt;
+
+    if (e.boss === "stiletto") { this.aiStiletto(e, dt, nx, ny, dist); return; }
+    if (e.boss === "hydra") { this.aiHydra(e, dt, nx, ny, dist); return; }
+    if (e.boss === "magnetar") { this.aiMagnetar(e, dt, nx, ny, dist); return; }
+    if (e.boss === "boneking") { this.aiBoneKing(e, dt, nx, ny, dist); return; }
+    if (e.boss === "titan") { this.aiTitan(e, dt, nx, ny, dist); return; }
+
     let vx = nx * e.speed;
     let vy = ny * e.speed;
 
@@ -1622,6 +1661,192 @@ export class Engine {
     e.bossVy = vy;
   }
 
+  /* ── ИИ новых боссов ── */
+
+  /** Стриж: кружит → телеграф → молниеносный рывок → телепорт за спину. */
+  private aiStiletto(e: Enemy, dt: number, nx: number, ny: number, dist: number) {
+    const col = BOSSES.stiletto.color;
+    if (e.tele > 0) {
+      e.tele -= dt;
+      e.bossVx = 0;
+      e.bossVy = 0;
+      if (e.tele <= 0) {
+        e.chargeT = 0.24;
+        this.sfx.whoosh();
+      }
+    } else if (e.chargeT > 0) {
+      e.chargeT -= dt;
+      e.bossVx = e.teleX * 900;
+      e.bossVy = e.teleY * 900;
+      this.particles.push({
+        kind: "ghost", x: e.x, y: e.y, vx: 0, vy: 0,
+        t: 0, life: 0.28, size: e.r, color: col, rot: Math.atan2(e.teleY, e.teleX), vr: 0,
+      });
+      if (e.chargeT <= 0) {
+        const ox = e.x;
+        const oy = e.y;
+        const a = rand(0, TAU);
+        const target = this.resolveCircle(this.px + Math.cos(a) * 230, this.py + Math.sin(a) * 230, e.r);
+        e.x = target.x;
+        e.y = target.y;
+        this.puff(ox, oy, col, 9);
+        this.puff(e.x, e.y, col, 9);
+        this.particles.push({ kind: "flash", x: e.x, y: e.y, vx: 0, vy: 0, t: 0, life: 0.16, size: 26, color: col, rot: rand(0, TAU), vr: 0 });
+        this.sfx.blink();
+        e.atkCd = 1.5;
+      }
+    } else {
+      const want = dist > 250 ? 1 : 0.35;
+      e.bossVx = nx * e.speed * 1.3 * want;
+      e.bossVy = ny * e.speed * 1.3 * want;
+      if (e.atkCd <= 0 && dist < 470) {
+        e.atkCd = 2.1;
+        e.tele = 0.38;
+        e.teleX = nx;
+        e.teleY = ny;
+        this.sfx.mineBeep();
+      }
+    }
+  }
+
+  /** Гидра: держит дистанцию, плюется веерами, каждый третий залп — кольцо. */
+  private aiHydra(e: Enemy, dt: number, nx: number, ny: number, dist: number) {
+    void dt;
+    const want = 330;
+    const dirv = dist > want + 45 ? 1 : dist < want - 45 ? -1 : 0;
+    const sx = -ny;
+    const sy = nx;
+    const strafe = Math.sin(e.t * 0.9);
+    e.bossVx = nx * dirv * e.speed + sx * strafe * e.speed * 0.8;
+    e.bossVy = ny * dirv * e.speed + sy * strafe * e.speed * 0.8;
+    if (e.atkCd <= 0) {
+      e.atkCd = 2.25;
+      e.ringCd++;
+      const base = Math.atan2(this.py - e.y, this.px - e.x);
+      if (e.ringCd % 3 === 0) {
+        const n = 16;
+        for (let k = 0; k < n; k++) {
+          const a = base + (k / n) * TAU;
+          this.ebullets.push({ x: e.x, y: e.y, vx: Math.cos(a) * 190, vy: Math.sin(a) * 190, dmg: 8 * this.dmgMul(), r: 6, life: 3.5, t: 0, color: "#7dff5e" });
+        }
+        this.particles.push({ kind: "ring", x: e.x, y: e.y, vx: 0, vy: 0, t: 0, life: 0.35, size: 24, color: "#7dff5e", rot: 0, vr: 0 });
+        this.sfx.shootPlasma();
+      } else {
+        for (let k = -2; k <= 2; k++) {
+          const a = base + k * 0.13;
+          this.ebullets.push({ x: e.x, y: e.y, vx: Math.cos(a) * 300, vy: Math.sin(a) * 300, dmg: 9 * this.dmgMul(), r: 6, life: 3, t: 0, color: "#7dff5e" });
+        }
+        this.puff(e.x + Math.cos(base) * e.r, e.y + Math.sin(base) * e.r, "#7dff5e", 5);
+        this.sfx.spit();
+      }
+    }
+  }
+
+  /** Магнетар: притягивает игрока, крутит спираль снарядов. */
+  private aiMagnetar(e: Enemy, dt: number, nx: number, ny: number, dist: number) {
+    const want = 300;
+    const dirv = dist > want + 60 ? 1 : dist < want - 60 ? -1 : 0;
+    e.bossVx = nx * dirv * e.speed;
+    e.bossVy = ny * dirv * e.speed;
+    if (e.tele > 0) {
+      /* спиральная фаза */
+      e.tele -= dt;
+      e.wander += dt * 4.8;
+      if (e.shootCd <= 0) {
+        e.shootCd = 0.09;
+        this.ebullets.push({
+          x: e.x, y: e.y,
+          vx: Math.cos(e.wander) * 235, vy: Math.sin(e.wander) * 235,
+          dmg: 8 * this.dmgMul(), r: 6, life: 3.2, t: 0, color: "#e06bff",
+        });
+        this.sfx.spiral();
+      }
+      if (e.tele <= 0) e.atkCd = 1.5;
+    } else if (e.atkCd <= 0) {
+      e.tele = 2.3;
+      e.shootCd = 0;
+      this.particles.push({ kind: "ring", x: e.x, y: e.y, vx: 0, vy: 0, t: 0, life: 0.4, size: 26, color: "#e06bff", rot: 0, vr: 0 });
+      this.sfx.overload();
+    }
+    /* гравитационная тяга */
+    if (dist < 470 && this.dashT <= 0) {
+      const pull = 118 * dt;
+      const pos = this.resolveCircle(this.px - nx * pull, this.py - ny * pull, 14);
+      this.px = pos.x;
+      this.py = pos.y;
+    }
+  }
+
+  /** Костяной Король: костяной щит (−55% урона), призыв стаи, slam-кольцо. */
+  private aiBoneKing(e: Enemy, dt: number, nx: number, ny: number, dist: number) {
+    e.wander += dt;
+    const shieldOn = e.wander % 6 < 3.4;
+    if (e.tele > 0) {
+      e.tele -= dt;
+      e.bossVx = 0;
+      e.bossVy = 0;
+      this.shake = Math.min(8, this.shake + 8 * dt);
+      if (e.tele <= 0) {
+        this.rings.push({ x: e.x, y: e.y, r: 14, speed: 420, maxR: 205, dmg: 15 * this.dmgMul(), color: "#f0e6d2", hit: false });
+        this.sfx.titanSlam();
+        this.shake = Math.min(18, this.shake + 10);
+        this.burst(e.x, e.y, "#f0e6d2", 16);
+        e.atkCd = 3.4;
+      }
+    } else {
+      e.bossVx = nx * e.speed;
+      e.bossVy = ny * e.speed;
+      if (e.atkCd <= 0) {
+        e.atkCd = 3.2;
+        if (!shieldOn && dist < 245) {
+          e.tele = 0.55;
+          this.sfx.clack();
+        } else if (this.enemies.length < 42) {
+          for (let k = 0; k < 3; k++) {
+            const a = e.t + (k / 3) * TAU;
+            this.spawnAt("chaser", e.x + Math.cos(a) * 75, e.y + Math.sin(a) * 75);
+          }
+          this.particles.push({ kind: "ring", x: e.x, y: e.y, vx: 0, vy: 0, t: 0, life: 0.35, size: 26, color: "#f0e6d2", rot: 0, vr: 0 });
+          this.sfx.clack();
+        }
+      }
+    }
+  }
+
+  /** Пепельный Титан: медленный, оставляет горящую землю, бьёт ударной волной. */
+  private aiTitan(e: Enemy, dt: number, nx: number, ny: number, dist: number) {
+    void dt;
+    void dist;
+    if (e.tele > 0) {
+      e.tele -= dt;
+      e.bossVx = 0;
+      e.bossVy = 0;
+      this.shake = Math.min(10, this.shake + 12 * dt);
+      if (e.tele <= 0) {
+        this.rings.push({ x: e.x, y: e.y, r: 22, speed: 360, maxR: 335, dmg: 18 * this.dmgMul(), color: "#ff6a2e", hit: false });
+        this.sfx.titanSlam();
+        this.shake = Math.min(22, this.shake + 14);
+        this.burst(e.x, e.y, "#ff6a2e", 24);
+        this.decal(e.x, e.y, 58, "rgba(22,11,5,0.5)");
+        e.atkCd = 3.4;
+      }
+    } else {
+      e.bossVx = nx * e.speed;
+      e.bossVy = ny * e.speed;
+      if (e.shootCd <= 0) {
+        e.shootCd = 1.15;
+        if (this.firePatches.length < 42) {
+          this.firePatches.push({ x: e.x + rand(-22, 22), y: e.y + rand(-22, 22), r: 34, t: 6, cd: 0 });
+        }
+      }
+      if (e.atkCd <= 0) {
+        e.atkCd = 3.4;
+        e.tele = 0.7;
+        this.sfx.mineBeep();
+      }
+    }
+  }
+
   private detonateBomber(idx: number) {
     const e = this.enemies[idx];
     this.enemies.splice(idx, 1);
@@ -1644,7 +1869,14 @@ export class Engine {
   }
 
   private damageEnemy(e: Enemy, dmg: number, crit: boolean, kx: number, ky: number, silent: boolean) {
-    e.hp -= dmg;
+    let final = dmg;
+    /* костяной щит Короля гасит больше половины урона */
+    if (e.boss === "boneking" && e.wander % 6 < 3.4) {
+      final *= 0.45;
+      this.puff(e.x, e.y, "#f0e6d2", 2);
+    }
+    e.hp -= final;
+    dmg = final;
     e.flash = 0.09;
     e.kx += kx;
     e.ky += ky;
@@ -1865,6 +2097,25 @@ export class Engine {
     }
     c.globalAlpha = 1;
 
+    /* горящая земля Титана */
+    for (const f of this.firePatches) {
+      const k = Math.min(1, f.t / 1.6);
+      const pulse = 0.5 + 0.5 * Math.sin(t * 9 + f.x * 0.05);
+      c.fillStyle = hexA("#ff6a2e", (0.09 + 0.06 * pulse) * k);
+      c.beginPath();
+      c.arc(f.x, f.y, f.r, 0, TAU);
+      c.fill();
+      c.fillStyle = hexA("#ffb020", 0.1 * pulse * k);
+      c.beginPath();
+      c.arc(f.x, f.y, f.r * 0.55, 0, TAU);
+      c.fill();
+      c.strokeStyle = hexA("#ff6a2e", 0.3 * k);
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(f.x, f.y, f.r, 0, TAU);
+      c.stroke();
+    }
+
     /* ящики */
     for (const ch of this.visibleChunks()) {
       for (const cr of ch.crates) {
@@ -2051,6 +2302,57 @@ export class Engine {
         c.lineWidth = 3;
         c.beginPath();
         c.arc(e.x, e.y, e.r + 14, 0, TAU);
+        c.stroke();
+      } else if (e.boss === "stiletto") {
+        /* тонкая линия будущего рывка */
+        const pulse = 0.3 + 0.3 * Math.sin(t * 30);
+        c.strokeStyle = `rgba(141,246,255,${pulse + 0.2})`;
+        c.lineWidth = 2.5;
+        c.beginPath();
+        c.moveTo(e.x + e.teleX * e.r, e.y + e.teleY * e.r);
+        c.lineTo(e.x + e.teleX * 540, e.y + e.teleY * 540);
+        c.stroke();
+        c.fillStyle = `rgba(141,246,255,${pulse})`;
+        c.beginPath();
+        c.arc(e.x + e.teleX * 540, e.y + e.teleY * 540, 5, 0, TAU);
+        c.fill();
+      } else if (e.boss === "boneking") {
+        /* растущий круг slam-удара */
+        const frac = 1 - e.tele / 0.55;
+        const pulse = 0.3 + 0.3 * Math.sin(t * 26);
+        c.strokeStyle = `rgba(240,230,210,${pulse + 0.25})`;
+        c.lineWidth = 3;
+        c.beginPath();
+        c.arc(e.x, e.y, 30 + frac * 175, 0, TAU);
+        c.stroke();
+        c.strokeStyle = `rgba(240,230,210,${pulse * 0.5})`;
+        c.beginPath();
+        c.arc(e.x, e.y, 205, 0, TAU);
+        c.stroke();
+      } else if (e.boss === "titan") {
+        /* раскалённый круг будущей ударной волны */
+        const frac = 1 - e.tele / 0.7;
+        c.fillStyle = `rgba(255,106,46,${0.08 + 0.1 * frac})`;
+        c.beginPath();
+        c.arc(e.x, e.y, e.r + frac * 90, 0, TAU);
+        c.fill();
+        const pulse = 0.35 + 0.35 * Math.sin(t * 22);
+        c.strokeStyle = `rgba(255,106,46,${pulse + 0.25})`;
+        c.lineWidth = 3.5;
+        c.beginPath();
+        c.arc(e.x, e.y, 40 + frac * 290, 0, TAU);
+        c.stroke();
+      } else if (e.boss === "magnetar") {
+        /* поле притяжения во время спиральной фазы */
+        const pulse = 0.14 + 0.12 * Math.sin(t * 12);
+        c.strokeStyle = `rgba(224,107,255,${pulse + 0.1})`;
+        c.lineWidth = 2;
+        c.beginPath();
+        c.arc(e.x, e.y, 470, 0, TAU);
+        c.stroke();
+        c.strokeStyle = `rgba(224,107,255,${pulse + 0.3})`;
+        c.beginPath();
+        c.arc(e.x, e.y, e.r + 18 + Math.sin(t * 16) * 4, 0, TAU);
         c.stroke();
       }
     }
@@ -2542,7 +2844,138 @@ export class Engine {
     c.strokeStyle = col;
     c.lineWidth = e.boss ? 3 : 2;
 
-    if (e.boss === "mother" || (!e.boss && e.type === "chaser")) {
+    if (e.boss === "stiletto") {
+      /* узкий клинок с хвостовыми плавниками */
+      c.beginPath();
+      c.moveTo(e.r * 1.5, 0);
+      c.lineTo(-e.r * 0.8, -e.r * 0.75);
+      c.lineTo(-e.r * 0.2, 0);
+      c.lineTo(-e.r * 0.8, e.r * 0.75);
+      c.closePath();
+      c.fill();
+      c.stroke();
+      c.strokeStyle = hexA(col, 0.7);
+      c.beginPath();
+      c.moveTo(-e.r * 0.5, -e.r * 0.35);
+      c.lineTo(-e.r * 1.3, -e.r * 0.75);
+      c.moveTo(-e.r * 0.5, e.r * 0.35);
+      c.lineTo(-e.r * 1.3, e.r * 0.75);
+      c.stroke();
+      c.fillStyle = "#ffffff";
+      c.beginPath();
+      c.arc(e.r * 0.55, 0, 3, 0, TAU);
+      c.fill();
+    } else if (e.boss === "hydra") {
+      /* туловище + три головы */
+      c.beginPath();
+      c.arc(0, 0, e.r, 0, TAU);
+      c.fill();
+      c.stroke();
+      for (let k = 0; k < 3; k++) {
+        const a = Math.sin(t * 3 + k * 2.1) * 0.4 + (k - 1) * 0.6;
+        const hx = Math.cos(a) * e.r * 0.85;
+        const hy = Math.sin(a) * e.r * 0.85;
+        c.fillStyle = "#0d1322";
+        c.beginPath();
+        c.arc(hx, hy, e.r * 0.42, 0, TAU);
+        c.fill();
+        c.stroke();
+        c.fillStyle = col;
+        c.beginPath();
+        c.arc(hx + Math.cos(a) * e.r * 0.2, hy + Math.sin(a) * e.r * 0.2, e.r * 0.15, 0, TAU);
+        c.fill();
+      }
+    } else if (e.boss === "magnetar") {
+      /* ядро + вращающиеся магнитные дуги */
+      c.beginPath();
+      c.arc(0, 0, e.r * 0.8, 0, TAU);
+      c.fill();
+      c.stroke();
+      for (let k = 0; k < 2; k++) {
+        const a = t * 2.4 + k * Math.PI;
+        c.strokeStyle = col;
+        c.lineWidth = 4.5;
+        c.beginPath();
+        c.arc(0, 0, e.r * 1.25, a - 0.7, a + 0.7);
+        c.stroke();
+      }
+      c.strokeStyle = hexA(col, 0.4);
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(0, 0, e.r * 1.7, -t * 1.6, -t * 1.6 + 4.4);
+      c.stroke();
+      c.fillStyle = "#ffffff";
+      c.beginPath();
+      c.arc(0, 0, e.r * 0.28, 0, TAU);
+      c.fill();
+    } else if (e.boss === "boneking") {
+      /* пятиугольник с короной и орбитальными костями */
+      c.beginPath();
+      for (let k = 0; k < 5; k++) {
+        const a = (k / 5) * TAU - Math.PI / 2;
+        c.lineTo(Math.cos(a) * e.r, Math.sin(a) * e.r);
+      }
+      c.closePath();
+      c.fill();
+      c.stroke();
+      c.fillStyle = col;
+      c.beginPath();
+      c.moveTo(-e.r * 0.62, -e.r * 0.66);
+      c.lineTo(-e.r * 0.36, -e.r * 1.28);
+      c.lineTo(-e.r * 0.1, -e.r * 0.72);
+      c.lineTo(0, -e.r * 1.4);
+      c.lineTo(e.r * 0.1, -e.r * 0.72);
+      c.lineTo(e.r * 0.36, -e.r * 1.28);
+      c.lineTo(e.r * 0.62, -e.r * 0.66);
+      c.closePath();
+      c.fill();
+      c.fillStyle = "#0d1322";
+      c.beginPath();
+      c.arc(-e.r * 0.28, -e.r * 0.1, 3.6, 0, TAU);
+      c.arc(e.r * 0.28, -e.r * 0.1, 3.6, 0, TAU);
+      c.fill();
+      const shieldOn = e.wander % 6 < 3.4;
+      c.save();
+      c.rotate(t * (shieldOn ? 2.4 : 0.7));
+      c.fillStyle = shieldOn ? col : hexA(col, 0.35);
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * TAU;
+        c.save();
+        c.translate(Math.cos(a) * e.r * 1.6, Math.sin(a) * e.r * 1.6);
+        c.rotate(a);
+        c.fillRect(-5.5, -2, 11, 4);
+        c.restore();
+      }
+      c.restore();
+    } else if (e.boss === "titan") {
+      /* исполин с бронепластинами и раскалёнными трещинами */
+      c.beginPath();
+      c.arc(0, 0, e.r, 0, TAU);
+      c.fill();
+      c.stroke();
+      c.strokeStyle = hexA(col, 0.55);
+      c.lineWidth = 2.5;
+      for (let k = 0; k < 5; k++) {
+        const a = (k / 5) * TAU + t * 0.3;
+        c.beginPath();
+        c.arc(0, 0, e.r * (0.45 + k * 0.1), a, a + 2.2);
+        c.stroke();
+      }
+      const glow = e.tele > 0 ? 0.9 : 0.4 + 0.2 * Math.sin(t * 4);
+      c.strokeStyle = hexA("#ffb020", glow);
+      c.lineWidth = 2.2;
+      c.beginPath();
+      c.moveTo(-e.r * 0.5, -e.r * 0.2);
+      c.lineTo(0, e.r * 0.12);
+      c.lineTo(e.r * 0.42, -e.r * 0.3);
+      c.moveTo(-e.r * 0.2, e.r * 0.52);
+      c.lineTo(e.r * 0.16, e.r * 0.16);
+      c.stroke();
+      c.fillStyle = "#ffffff";
+      c.beginPath();
+      c.arc(e.r * 0.3, -e.r * 0.15, 4, 0, TAU);
+      c.fill();
+    } else if (e.boss === "mother" || (!e.boss && e.type === "chaser")) {
       c.beginPath();
       const spikes = e.boss ? 13 : 9;
       for (let i = 0; i <= spikes * 2; i++) {
@@ -2676,7 +3109,10 @@ export class Engine {
     }
 
     /* глаза (для форм с телом) */
-    if (e.type === "chaser" || e.type === "runner" || e.type === "brute" || e.type === "bomber" || e.boss === "mother" || e.boss === "juggernaut") {
+    const wantsEyes = !e.boss
+      ? e.type === "chaser" || e.type === "runner" || e.type === "brute" || e.type === "bomber"
+      : e.boss === "mother" || e.boss === "juggernaut";
+    if (wantsEyes) {
       c.fillStyle = "#ffffff";
       c.beginPath();
       c.arc(e.r * 0.42, -e.r * 0.22, e.boss ? 4 : 2.6, 0, TAU);

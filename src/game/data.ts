@@ -2,7 +2,7 @@
 
 export type WeaponId = "pistol" | "smg" | "shotgun" | "laser" | "plasma" | "rail" | "minigun";
 export type EnemyType = "chaser" | "runner" | "spitter" | "brute" | "bomber" | "wisp" | "healer" | "gazer" | "scuttler";
-export type BossId = "mother" | "juggernaut" | "overseer";
+export type BossId = "mother" | "juggernaut" | "overseer" | "stiletto" | "hydra" | "magnetar" | "boneking" | "titan";
 export type BiomeId = "wasteland" | "frost" | "ember" | "fungal";
 export type Phase = "menu" | "playing" | "intermission" | "paused" | "craft" | "gameover";
 export type Rarity = "common" | "rare" | "epic" | "weapon";
@@ -96,6 +96,11 @@ export const BOSSES: Record<BossId, BossDef> = {
   mother: { id: "mother", name: "МАТРИАРХ", sub: "порождает рой", color: "#ff3864", r: 42, hp: 700, speed: 52, dmg: 26, score: 250, retinue: ["chaser", "runner", "chaser"] },
   juggernaut: { id: "juggernaut", name: "ИСТРЕБИТЕЛЬ", sub: "сокрушает всё", color: "#ffb020", r: 40, hp: 950, speed: 44, dmg: 30, score: 300, retinue: ["brute", "bomber", "chaser"] },
   overseer: { id: "overseer", name: "НАДЗИРАТЕЛЬ", sub: "видит всё", color: "#c04dff", r: 34, hp: 620, speed: 60, dmg: 18, score: 280, retinue: ["wisp", "gazer", "wisp"] },
+  stiletto: { id: "stiletto", name: "СТРИЖ", sub: "неуловимый убийца", color: "#8df6ff", r: 18, hp: 440, speed: 175, dmg: 12, score: 260, retinue: ["runner", "wisp", "runner"] },
+  hydra: { id: "hydra", name: "ГИДРА", sub: "три головы — одна цель", color: "#7dff5e", r: 28, hp: 580, speed: 62, dmg: 12, score: 280, retinue: ["spitter", "gazer", "chaser"] },
+  magnetar: { id: "magnetar", name: "МАГНЕТАР", sub: "стягивает и рвёт", color: "#e06bff", r: 26, hp: 520, speed: 56, dmg: 10, score: 300, retinue: ["wisp", "chaser", "wisp"] },
+  boneking: { id: "boneking", name: "КОСТЯНОЙ КОРОЛЬ", sub: "кость к кости", color: "#f0e6d2", r: 32, hp: 740, speed: 40, dmg: 14, score: 320, retinue: ["chaser", "bomber", "chaser"] },
+  titan: { id: "titan", name: "ПЕПЕЛЬНЫЙ ТИТАН", sub: "земля горит под ним", color: "#ff6a2e", r: 46, hp: 1050, speed: 26, dmg: 26, score: 350, retinue: ["brute", "bomber", "bomber"] },
 };
 
 /* ── игрок ── */
